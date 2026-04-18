@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthSight AI | Diabetes Intelligence Dashboard</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar / Prediction Panel -->
+        <div class="prediction-sidebar">
+            <div class="sidebar-header">
+                <div class="logo-small">
+                    <i class="fas fa-heart-pulse"></i>
+                </div>
+                <h2>Risk Assessment</h2>
+                <p class="sidebar-sub">Enter lab values for instant prediction</p>
+            </div>
+            
+            <form method="POST" action="/predict" id="predictionForm" class="prediction-form">
+                {% for name in ['Pregnancies','Glucose','BloodPressure','SkinThickness','Insulin','BMI','DiabetesPedigreeFunction','Age'] %}
+                <div class="sidebar-input-group">
+                    <label for="{{ name }}">{{ name }}</label>
+                    <input type="number" step="any" name="{{ name }}" id="{{ name }}" 
+                           placeholder="{{ name }}" value="{{ features.get(name, '') }}" required>
+                </div>
+                {% endfor %}
+                <button type="submit" class="sidebar-btn" id="predictButton">
+                    <i class="fas fa-stethoscope"></i> Analyze Risk
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+            
+            {% if prediction_text %}
+            <div class="sidebar-result {% if 'High Risk' in prediction_text %}high-risk-sidebar{% else %}low-risk-sidebar{% endif %}">
+                <div class="result-main">{{ prediction_text }}</div>
+                <div class="result-prob">{{ probability_text }}</div>
+            </div>
+            {% endif %}
+            
+            <div class="sidebar-footer">
+                <i class="fas fa-shield-alt"></i> Data processed locally · HIPAA-aware demo
+            </div>
+        </div>
+        
+        <!-- Main Dashboard Area -->
+        <div class="main-dashboard">
+            <!-- Top Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <i class="fas fa-users stat-icon"></i>
+                    <div class="stat-content">
+                        <span class="stat-value">{{ stats.total_patients }}</span>
+                        <span class="stat-label">Total Patients</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-percent stat-icon"></i>
+                    <div class="stat-content">
+                        <span class="stat-value">{{ stats.prevalence }}%</span>
+                        <span class="stat-label">Diabetes Prevalence</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-procedures stat-icon"></i>
+                    <div class="stat-content">
+                        <span class="stat-value">{{ stats.diabetic_count }}</span>
+                        <span class="stat-label">Diabetic Cases</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-heartbeat stat-icon"></i>
+                    <div class="stat-content">
+                        <span class="stat-value">{{ stats.avg_glucose_diabetic }}</span>
+                        <span class="stat-label">Avg Glucose (Diabetic)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Charts Row 1 -->
+            <div class="charts-row">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3><i class="fas fa-chart-bar"></i> Glucose Distribution by Outcome</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="glucoseChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3><i class="fas fa-chart-line"></i> Diabetes Prevalence by Age Group</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="ageTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Charts Row 2 -->
+            <div class="charts-row">
+                <div class="chart-card full-width">
+                    <div class="chart-header">
+                        <h3><i class="fas fa-sitemap"></i> Feature Importance (SHAP-based)</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="importanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Comparison Table -->
+            <div class="table-card">
+                <h3><i class="fas fa-table"></i> Risk Factor Comparison</h3>
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Non-Diabetic (Avg)</th>
+                            <th>Diabetic (Avg)</th>
+                            <th>Difference</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Glucose (mg/dL)</td>
+                            <td>{{ stats.avg_glucose_non }}</td>
+                            <td class="highlight">{{ stats.avg_glucose_diabetic }}</td>
+                            <td>+{{ (stats.avg_glucose_diabetic - stats.avg_glucose_non)|round(1) }}</td>
+                        </tr>
+                        <tr>
+                            <td>BMI (kg/m²)</td>
+                            <td>{{ stats.avg_bmi_non }}</td>
+                            <td class="highlight">{{ stats.avg_bmi_diabetic }}</td>
+                            <td>+{{ (stats.avg_bmi_diabetic - stats.avg_bmi_non)|round(1) }}</td>
+                        </tr>
+                        <tr>
+                            <td>Age (years)</td>
+                            <td>{{ stats.avg_age_non }}</td>
+                            <td class="highlight">{{ stats.avg_age_diabetic }}</td>
+                            <td>+{{ (stats.avg_age_diabetic - stats.avg_age_non)|round(1) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- Loading Overlay -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); backdrop-filter: blur(4px); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="text-align: center;">
+        <div style="font-size: 48px; color: #0b4f6c;">
+            <i class="fas fa-spinner fa-pulse"></i>
+        </div>
+        <p style="margin-top: 16px; font-weight: 600; color: #0b2b3c;">Analyzing biomarkers...</p>
+    </div>
+</div>
+<!-- Yearly Trends Section -->
+<div class="charts-row">
+    <div class="chart-card full-width">
+        <div class="chart-header">
+            <h3><i class="fas fa-chart-line"></i> Diabetes Prevalence & Model Performance (2000–Present)</h3>
+            <div class="agent-badge" id="agentInsight">
+                <i class="fas fa-robot"></i> <span>AI Analyst: Loading insight...</span>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="yearlyTrendChart"></canvas>
+        </div>
+        <div class="trend-summary">
+            <span id="trendIndicator"></span>
+        </div>
+    </div>
+</div>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
