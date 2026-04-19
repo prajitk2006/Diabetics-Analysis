@@ -4,17 +4,14 @@
    NAVIGATION
    ============================================================ */
 function showSection(sectionId, navId) {
-  // Hide all sections
   document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-icon').forEach(n => n.classList.remove('active'));
 
-  // Show target
   const sec = document.getElementById('section-' + sectionId);
   const nav = document.getElementById(navId);
   if (sec) sec.classList.add('active');
   if (nav) nav.classList.add('active');
 
-  // Lazy-load charts per section
   if (sectionId === 'overview')  lazyLoad('overview');
   if (sectionId === 'risk')      lazyLoad('risk');
   if (sectionId === 'trends')    lazyLoad('trends');
@@ -22,7 +19,7 @@ function showSection(sectionId, navId) {
 }
 
 /* ============================================================
-   CHART REGISTRY (prevents double-init)
+   CHART REGISTRY
    ============================================================ */
 const _rendered = {};
 function lazyLoad(key) {
@@ -71,9 +68,6 @@ function glassScales(xTitle = '', yTitle = '') {
   };
 }
 
-/* ============================================================
-   HISTOGRAM HELPER
-   ============================================================ */
 function histogramData(arr, bins, min, max) {
   const bw = (max - min) / bins;
   const counts = new Array(bins).fill(0);
@@ -86,14 +80,82 @@ function histogramData(arr, bins, min, max) {
 }
 
 /* ============================================================
-   OVERVIEW CHARTS
+   DATA FETCHING & UI POPULATION
+   ============================================================ */
+let globalStats = null;
+
+async function fetchStats() {
+  try {
+    const res = await fetch('/api/stats');
+    globalStats = await res.json();
+    populateStats(globalStats);
+    populateComparisonTable(globalStats);
+    populateRiskGrid(globalStats);
+  } catch (e) {
+    console.error('Error fetching stats:', e);
+  }
+}
+
+function populateStats(stats) {
+  document.getElementById('stat-total').textContent = stats.total_patients;
+  document.getElementById('total-records-pill').textContent = stats.total_patients;
+  document.getElementById('stat-prevalence').textContent = stats.prevalence + '%';
+  document.getElementById('stat-diabetic').textContent = stats.diabetic_count;
+  document.getElementById('stat-glucose-diab').textContent = stats.avg_glucose_diabetic;
+}
+
+function populateComparisonTable(stats) {
+  const tbody = document.querySelector('#comparison-table tbody');
+  const rows = [
+    ['Glucose (mg/dL)', stats.avg_glucose_non, stats.avg_glucose_diabetic],
+    ['BMI (kg/m²)', stats.avg_bmi_non, stats.avg_bmi_diabetic],
+    ['Age (years)', stats.avg_age_non, stats.avg_age_diabetic]
+  ];
+  
+  tbody.innerHTML = rows.map(([name, non, diab]) => {
+    const diff = (diab - non).toFixed(1);
+    return `
+      <tr>
+        <td>${name}</td>
+        <td>${non}</td>
+        <td class="highlight">${diab}</td>
+        <td><span class="diff-badge">+${diff}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function populateRiskGrid(stats) {
+  const grid = document.getElementById('risk-metrics-grid');
+  const metrics = [
+    { name: 'Glucose', non: stats.avg_glucose_non, diab: stats.avg_glucose_diabetic, max: 200 },
+    { name: 'BMI', non: stats.avg_bmi_non, diab: stats.avg_bmi_diabetic, max: 60 },
+    { name: 'Age', non: stats.avg_age_non, diab: stats.avg_age_diabetic, max: 80 }
+  ];
+
+  grid.innerHTML = metrics.map(m => `
+    <div class="risk-metric-card">
+      <div class="risk-metric-label">${m.name}</div>
+      <div style="font-size:22px;font-weight:700;font-family:'Outfit',sans-serif;color:var(--text-primary)">${m.diab}</div>
+      <div class="risk-bar-track">
+        <div class="risk-bar-fill" style="width:${Math.round((m.diab / m.max) * 100)}%"></div>
+      </div>
+      <div class="risk-values">
+        <span>Non-Diabetic: ${m.non}</span>
+        <span class="val-diabetic">Diabetic: ${m.diab}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ============================================================
+   CHART INITIALIZERS
    ============================================================ */
 async function initOverviewCharts() {
   try {
     const res  = await fetch('/api/chart_data');
     const data = await res.json();
 
-    /* --- Glucose Distribution --- */
     const glucoseCtx = document.getElementById('glucoseChart').getContext('2d');
     const binLabels  = Array.from({ length: 20 }, (_, i) => ((i * 10) + 50) + '–' + ((i * 10) + 60));
     new Chart(glucoseCtx, {
@@ -106,16 +168,14 @@ async function initOverviewCharts() {
             data: histogramData(data.non_diabetic_glucose, 20, 50, 250),
             backgroundColor: 'rgba(16,185,129,0.55)',
             borderColor: GLASS.color.green,
-            borderWidth: 1,
-            borderRadius: 4,
+            borderWidth: 1, borderRadius: 4,
           },
           {
             label: 'Diabetic',
             data: histogramData(data.diabetic_glucose, 20, 50, 250),
             backgroundColor: 'rgba(244,63,94,0.55)',
             borderColor: GLASS.color.rose,
-            borderWidth: 1,
-            borderRadius: 4,
+            borderWidth: 1, borderRadius: 4,
           }
         ]
       },
@@ -126,7 +186,6 @@ async function initOverviewCharts() {
       }
     });
 
-    /* --- Age Trend --- */
     const ageCtx = document.getElementById('ageTrendChart').getContext('2d');
     new Chart(ageCtx, {
       type: 'line',
@@ -137,11 +196,8 @@ async function initOverviewCharts() {
           data: data.age_prevalence,
           borderColor: GLASS.color.teal,
           backgroundColor: 'rgba(6,182,212,0.12)',
-          fill: true,
-          tension: 0.4,
-          pointBackgroundColor: GLASS.color.teal,
-          pointRadius: 5,
-          pointHoverRadius: 7,
+          fill: true, tension: 0.4,
+          pointBackgroundColor: GLASS.color.teal, pointRadius: 5,
         }]
       },
       options: {
@@ -151,11 +207,8 @@ async function initOverviewCharts() {
       }
     });
 
-    /* --- Feature Importance --- */
     const impCtx = document.getElementById('importanceChart').getContext('2d');
-    const colors = [GLASS.color.blue, GLASS.color.teal, GLASS.color.violet,
-                    GLASS.color.rose, GLASS.color.amber, GLASS.color.green,
-                    '#a78bfa', '#fb923c'];
+    const colors = [GLASS.color.blue, GLASS.color.teal, GLASS.color.violet, GLASS.color.rose, GLASS.color.amber, GLASS.color.green, '#a78bfa', '#fb923c'];
     new Chart(impCtx, {
       type: 'bar',
       data: {
@@ -164,33 +217,24 @@ async function initOverviewCharts() {
           label: 'Importance',
           data: data.feature_importance,
           backgroundColor: colors.map(c => c + 'cc'),
-          borderColor: colors,
-          borderWidth: 1,
-          borderRadius: 6,
+          borderColor: colors, borderWidth: 1, borderRadius: 6,
         }]
       },
       options: {
-        indexAxis: 'y',
-        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: glassScales('Importance Score', '')
       }
     });
 
-  } catch (e) {
-    console.error('Overview charts error:', e);
-  }
+  } catch (e) { console.error('Overview charts error:', e); }
 }
 
-/* ============================================================
-   RISK CHARTS
-   ============================================================ */
 async function initRiskCharts() {
   try {
     const res  = await fetch('/api/chart_data');
     const data = await res.json();
 
-    /* --- BMI Distribution --- */
     const bmiCtx = document.getElementById('bmiChart').getContext('2d');
     new Chart(bmiCtx, {
       type: 'bar',
@@ -199,20 +243,13 @@ async function initRiskCharts() {
         datasets: [
           {
             label: 'Non-Diabetic',
-            data: (() => {
-              const d = data.non_diabetic_glucose;
-              return Array.from({ length: 15 }, () => Math.floor(Math.random() * 30 + 5));
-            })(),
-            backgroundColor: 'rgba(6,182,212,0.5)',
-            borderColor: GLASS.color.teal,
-            borderRadius: 4,
+            data: Array.from({ length: 15 }, () => Math.floor(Math.random() * 30 + 5)),
+            backgroundColor: 'rgba(6,182,212,0.5)', borderColor: GLASS.color.teal, borderRadius: 4,
           },
           {
             label: 'Diabetic',
             data: Array.from({ length: 15 }, () => Math.floor(Math.random() * 25 + 8)),
-            backgroundColor: 'rgba(244,63,94,0.5)',
-            borderColor: GLASS.color.rose,
-            borderRadius: 4,
+            backgroundColor: 'rgba(244,63,94,0.5)', borderColor: GLASS.color.rose, borderRadius: 4,
           }
         ]
       },
@@ -223,7 +260,6 @@ async function initRiskCharts() {
       }
     });
 
-    /* --- Outcome Doughnut --- */
     const outCtx = document.getElementById('outcomeChart').getContext('2d');
     new Chart(outCtx, {
       type: 'doughnut',
@@ -233,35 +269,22 @@ async function initRiskCharts() {
           data: [data.non_diabetic_glucose.length, data.diabetic_glucose.length],
           backgroundColor: ['rgba(16,185,129,0.7)', 'rgba(244,63,94,0.7)'],
           borderColor: [GLASS.color.green, GLASS.color.rose],
-          borderWidth: 2,
-          hoverOffset: 8,
+          borderWidth: 2, hoverOffset: 8,
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { position: 'bottom' },
-          tooltip: {
-            callbacks: {
-              label: c => {
-                const total = c.dataset.data.reduce((a, b) => a + b, 0);
-                return ` ${c.label}: ${c.raw} (${((c.raw/total)*100).toFixed(1)}%)`;
-              }
-            }
-          }
+          tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw}` } }
         },
         cutout: '62%'
       }
     });
 
-  } catch (e) {
-    console.error('Risk charts error:', e);
-  }
+  } catch (e) { console.error('Risk charts error:', e); }
 }
 
-/* ============================================================
-   YEARLY TRENDS CHART
-   ============================================================ */
 async function initYearlyChart() {
   try {
     const res  = await fetch('/api/yearly_trends');
@@ -276,88 +299,48 @@ async function initYearlyChart() {
           {
             label: 'Prevalence (%)',
             data: data.prevalence,
-            borderColor: GLASS.color.rose,
-            backgroundColor: 'rgba(244,63,94,0.08)',
-            yAxisID: 'y',
-            tension: 0.4,
-            fill: true,
-            pointRadius: 3,
-            pointHoverRadius: 6,
+            borderColor: GLASS.color.rose, backgroundColor: 'rgba(244,63,94,0.08)',
+            yAxisID: 'y', tension: 0.4, fill: true, pointRadius: 3,
           },
           {
             label: 'Model Recall',
             data: data.recall,
-            borderColor: GLASS.color.blue,
-            backgroundColor: 'transparent',
-            yAxisID: 'y1',
-            tension: 0.4,
-            borderDash: [6, 4],
-            pointRadius: 0,
-            pointHoverRadius: 5,
+            borderColor: GLASS.color.blue, backgroundColor: 'transparent',
+            yAxisID: 'y1', tension: 0.4, borderDash: [6, 4], pointRadius: 0,
           }
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index' },
-        plugins: {
-          legend: { position: 'top' },
-          tooltip: {
-            callbacks: {
-              label: c => {
-                if (c.dataset.label.includes('Prev')) return ` ${c.dataset.label}: ${c.raw}%`;
-                return ` ${c.dataset.label}: ${Number(c.raw).toFixed(3)}`;
-              }
-            }
-          }
-        },
+        plugins: { legend: { position: 'top' } },
         scales: {
           x: { grid: { color: GLASS.gridColor }, ticks: { color: GLASS.tickColor, maxTicksLimit: 10 } },
-          y: {
-            beginAtZero: false, min: 4,
-            grid: { color: GLASS.gridColor },
-            ticks: { color: GLASS.tickColor, callback: v => v + '%' },
-            title: { display: true, text: 'Prevalence (%)', color: GLASS.tickColor }
-          },
-          y1: {
-            position: 'right',
-            beginAtZero: false, min: 0.6, max: 0.95,
-            grid: { drawOnChartArea: false },
-            ticks: { color: GLASS.tickColor },
-            title: { display: true, text: 'Recall', color: GLASS.tickColor }
-          }
+          y: { beginAtZero: false, min: 4, grid: { color: GLASS.gridColor }, ticks: { color: GLASS.tickColor } },
+          y1: { position: 'right', beginAtZero: false, min: 0.6, max: 0.95, grid: { drawOnChartArea: false }, ticks: { color: GLASS.tickColor } }
         }
       }
     });
 
-    // Trend indicator
     const trendSpan = document.getElementById('trendIndicator');
     const arrow = data.trend_direction === 'increasing' ? '↑' : '↓';
     const col   = data.trend_direction === 'increasing' ? GLASS.color.rose : GLASS.color.green;
     trendSpan.innerHTML = `<span style="color:${col}">${arrow} ${Math.abs(data.percent_change)}% change since 2000</span>`;
 
-    // AI insight
     const insRes  = await fetch('/api/agent_insight');
     const insData = await insRes.json();
     document.querySelector('#agentInsight span').textContent = insData.insight;
 
-  } catch (e) {
-    console.error('Yearly chart error:', e);
-  }
+  } catch (e) { console.error('Yearly chart error:', e); }
 }
 
-/* ============================================================
-   MODEL INSIGHTS CHARTS
-   ============================================================ */
 async function initModelCharts() {
   try {
     const res  = await fetch('/api/chart_data');
     const data = await res.json();
 
     const ctx = document.getElementById('importanceChart2').getContext('2d');
-    const colors = [GLASS.color.blue, GLASS.color.teal, GLASS.color.violet,
-                    GLASS.color.rose, GLASS.color.amber, GLASS.color.green,
-                    '#a78bfa', '#fb923c'];
+    const colors = [GLASS.color.blue, GLASS.color.teal, GLASS.color.violet, GLASS.color.rose, GLASS.color.amber, GLASS.color.green, '#a78bfa', '#fb923c'];
     new Chart(ctx, {
       type: 'bar',
       data: {
@@ -366,55 +349,94 @@ async function initModelCharts() {
           label: 'SHAP Importance',
           data: data.feature_importance,
           backgroundColor: colors.map(c => c + 'bb'),
-          borderColor: colors,
-          borderWidth: 1,
-          borderRadius: 6,
+          borderColor: colors, borderWidth: 1, borderRadius: 6,
         }]
       },
       options: {
-        indexAxis: 'y',
-        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: glassScales('Importance Score', '')
       }
     });
-  } catch (e) {
-    console.error('Model charts error:', e);
-  }
+  } catch (e) { console.error('Model charts error:', e); }
 }
 
 /* ============================================================
-   CLOCK
+   PREDICTION HANDLER
    ============================================================ */
-function updateClock() {
-  const now  = new Date();
-  const disp = document.getElementById('clockDisplay');
-  if (disp) {
-    disp.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-}
-
-/* ============================================================
-   LOADING OVERLAY
-   ============================================================ */
-const form    = document.getElementById('predictionForm');
+const form = document.getElementById('predictionForm');
 const overlay = document.getElementById('loadingOverlay');
 
 if (form) {
-  form.addEventListener('submit', () => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
     overlay.style.display = 'flex';
+    
+    const formData = new FormData(form);
+    try {
+      const res = await fetch('/api/predict', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await res.json();
+      
+      displayPrediction(result);
+    } catch (e) {
+      console.error('Prediction error:', e);
+    } finally {
+      overlay.style.display = 'none';
+    }
   });
 }
 
-window.addEventListener('pageshow', () => {
-  if (overlay) overlay.style.display = 'none';
-});
+function displayPrediction(data) {
+  const container = document.getElementById('prediction-result-box');
+  const placeholder = document.getElementById('prediction-result-placeholder');
+  
+  placeholder.style.display = 'none';
+  container.style.display = 'block';
+  
+  const isHigh = data.prediction_text.includes('High');
+  const probVal = parseFloat(data.probability_text.replace(/[^0-9.]/g, ''));
+  
+  container.innerHTML = `
+    <div class="result-box ${isHigh ? 'high' : 'low'}">
+      <div class="result-label">
+        <i class="fas ${isHigh ? 'fa-circle-exclamation' : 'fa-circle-check'}" style="margin-right:8px"></i>
+        ${data.prediction_text.replace('Result: ', '')}
+      </div>
+      <div class="result-prob">${data.probability_text}</div>
+      <div class="result-gauge">
+        <div class="result-gauge-fill" style="width:${probVal}%"></div>
+      </div>
+    </div>
+
+    <div class="agent-badge">
+      <i class="fas fa-robot"></i>
+      <span>
+        ${isHigh 
+          ? '⚠️ High diabetes risk detected. Elevated glucose and BMI are primary contributors. Recommend immediate clinical evaluation.' 
+          : '✅ Low diabetes risk assessed. Biomarkers are within acceptable ranges. Continue preventive health monitoring.'}
+      </span>
+    </div>
+  `;
+}
 
 /* ============================================================
-   INIT
+   CLOCK & INIT
    ============================================================ */
+function updateClock() {
+  const disp = document.getElementById('clockDisplay');
+  if (disp) disp.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   updateClock();
   setInterval(updateClock, 1000);
-  lazyLoad('overview'); // default active section
+  fetchStats();
+  lazyLoad('overview');
+});
+
+window.addEventListener('pageshow', () => {
+  if (overlay) overlay.style.display = 'none';
 });

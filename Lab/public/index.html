@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
@@ -70,7 +70,7 @@
       <div class="topbar-spacer"></div>
       <div class="topbar-pill">
         <div class="live-dot"></div>
-        Live · {{ stats.total_patients }} Records
+        Live · <span id="total-records-pill">...</span> Records
       </div>
       <div class="topbar-pill">
         <i class="fas fa-database" style="color:var(--accent-blue)"></i>
@@ -92,7 +92,7 @@
         <div class="stat-card blue">
           <div class="stat-icon-wrap blue"><i class="fas fa-users"></i></div>
           <div class="stat-info">
-            <span class="stat-value" id="c-total">{{ stats.total_patients }}</span>
+            <span class="stat-value" id="stat-total">...</span>
             <span class="stat-label">Total Patients</span>
           </div>
           <span class="stat-badge up">+0%</span>
@@ -100,7 +100,7 @@
         <div class="stat-card rose">
           <div class="stat-icon-wrap rose"><i class="fas fa-percent"></i></div>
           <div class="stat-info">
-            <span class="stat-value" id="c-prev">{{ stats.prevalence }}%</span>
+            <span class="stat-value" id="stat-prevalence">...</span>
             <span class="stat-label">Prevalence Rate</span>
           </div>
           <span class="stat-badge down">High</span>
@@ -108,7 +108,7 @@
         <div class="stat-card violet">
           <div class="stat-icon-wrap violet"><i class="fas fa-procedures"></i></div>
           <div class="stat-info">
-            <span class="stat-value" id="c-diab">{{ stats.diabetic_count }}</span>
+            <span class="stat-value" id="stat-diabetic">...</span>
             <span class="stat-label">Diabetic Cases</span>
           </div>
           <span class="stat-badge down">Risk</span>
@@ -116,7 +116,7 @@
         <div class="stat-card green">
           <div class="stat-icon-wrap green"><i class="fas fa-heart-pulse"></i></div>
           <div class="stat-info">
-            <span class="stat-value" id="c-gluc">{{ stats.avg_glucose_diabetic }}</span>
+            <span class="stat-value" id="stat-glucose-diab">...</span>
             <span class="stat-label">Avg Glucose (Diabetic)</span>
           </div>
           <span class="stat-badge up">mg/dL</span>
@@ -155,7 +155,7 @@
       <!-- Risk Comparison Table -->
       <div class="table-card">
         <h3><i class="fas fa-table" style="color:var(--accent-amber)"></i> Risk Factor Comparison</h3>
-        <table class="comparison-table">
+        <table class="comparison-table" id="comparison-table">
           <thead>
             <tr>
               <th>Metric</th>
@@ -165,24 +165,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>Glucose (mg/dL)</td>
-              <td>{{ stats.avg_glucose_non }}</td>
-              <td class="highlight">{{ stats.avg_glucose_diabetic }}</td>
-              <td><span class="diff-badge">+{{ (stats.avg_glucose_diabetic - stats.avg_glucose_non)|round(1) }}</span></td>
-            </tr>
-            <tr>
-              <td>BMI (kg/m²)</td>
-              <td>{{ stats.avg_bmi_non }}</td>
-              <td class="highlight">{{ stats.avg_bmi_diabetic }}</td>
-              <td><span class="diff-badge">+{{ (stats.avg_bmi_diabetic - stats.avg_bmi_non)|round(1) }}</span></td>
-            </tr>
-            <tr>
-              <td>Age (years)</td>
-              <td>{{ stats.avg_age_non }}</td>
-              <td class="highlight">{{ stats.avg_age_diabetic }}</td>
-              <td><span class="diff-badge">+{{ (stats.avg_age_diabetic - stats.avg_age_non)|round(1) }}</span></td>
-            </tr>
+            <!-- Populated by JS -->
           </tbody>
         </table>
       </div>
@@ -199,16 +182,40 @@
           <h2><i class="fas fa-flask" style="color:var(--accent-blue);margin-right:10px"></i>Biomarker Input</h2>
           <p>All 8 clinical parameters are required for prediction accuracy.</p>
 
-          <form method="POST" action="/predict" id="predictionForm">
+          <form id="predictionForm">
             <div class="inputs-grid">
-              {% for name in ['Pregnancies','Glucose','BloodPressure','SkinThickness','Insulin','BMI','DiabetesPedigreeFunction','Age'] %}
               <div class="input-group">
-                <label for="{{ name }}">{{ name }}</label>
-                <input type="number" step="any" name="{{ name }}" id="{{ name }}"
-                       placeholder="e.g. {{ '2' if name == 'Pregnancies' else '120' if name == 'Glucose' else '80' if name == 'BloodPressure' else '20' if name == 'SkinThickness' else '80' if name == 'Insulin' else '25.0' if name == 'BMI' else '0.5' if name == 'DiabetesPedigreeFunction' else '30' }}"
-                       value="{{ features.get(name, '') }}" required>
+                <label for="Pregnancies">Pregnancies</label>
+                <input type="number" step="any" name="Pregnancies" id="Pregnancies" placeholder="e.g. 2" required>
               </div>
-              {% endfor %}
+              <div class="input-group">
+                <label for="Glucose">Glucose</label>
+                <input type="number" step="any" name="Glucose" id="Glucose" placeholder="e.g. 120" required>
+              </div>
+              <div class="input-group">
+                <label for="BloodPressure">Blood Pressure</label>
+                <input type="number" step="any" name="BloodPressure" id="BloodPressure" placeholder="e.g. 80" required>
+              </div>
+              <div class="input-group">
+                <label for="SkinThickness">Skin Thickness</label>
+                <input type="number" step="any" name="SkinThickness" id="SkinThickness" placeholder="e.g. 20" required>
+              </div>
+              <div class="input-group">
+                <label for="Insulin">Insulin</label>
+                <input type="number" step="any" name="Insulin" id="Insulin" placeholder="e.g. 80" required>
+              </div>
+              <div class="input-group">
+                <label for="BMI">BMI</label>
+                <input type="number" step="any" name="BMI" id="BMI" placeholder="e.g. 25.0" required>
+              </div>
+              <div class="input-group">
+                <label for="DiabetesPedigreeFunction">Pedigree Function</label>
+                <input type="number" step="any" name="DiabetesPedigreeFunction" id="DiabetesPedigreeFunction" placeholder="e.g. 0.5" required>
+              </div>
+              <div class="input-group">
+                <label for="Age">Age</label>
+                <input type="number" step="any" name="Age" id="Age" placeholder="e.g. 30" required>
+              </div>
             </div>
 
             <button type="submit" class="predict-btn" id="predictButton">
@@ -218,41 +225,21 @@
         </div>
 
         <!-- Result -->
-        <div class="result-card">
+        <div class="result-card" id="result-container">
           <h2 style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:var(--text-primary)">
             <i class="fas fa-clipboard-check" style="color:var(--accent-violet);margin-right:8px"></i>Prediction Result
           </h2>
 
-          {% if prediction_text %}
-          <div class="result-box {{ 'high' if 'High' in prediction_text else 'low' }}">
-            <div class="result-label">
-              <i class="fas {{ 'fa-circle-exclamation' if 'High' in prediction_text else 'fa-circle-check' }}" style="margin-right:8px"></i>
-              {{ prediction_text | replace('Result: ', '') }}
-            </div>
-            <div class="result-prob">{{ probability_text }}</div>
-            {% set prob_val = probability_text | replace('Risk Probability: ','') | replace('%','') | float %}
-            <div class="result-gauge">
-              <div class="result-gauge-fill" style="width:{{ prob_val }}%"></div>
-            </div>
+          <div id="prediction-result-placeholder">
+              <div class="result-placeholder">
+                <i class="fas fa-microscope"></i>
+                <p>Enter patient biomarkers and click "Analyze Risk" to generate an AI prediction.</p>
+              </div>
           </div>
-
-          <div class="agent-badge">
-            <i class="fas fa-robot"></i>
-            <span>
-              {% if 'High' in prediction_text %}
-              ⚠️ High diabetes risk detected. Elevated glucose and BMI are primary contributors. Recommend immediate clinical evaluation and lifestyle intervention.
-              {% else %}
-              ✅ Low diabetes risk assessed. Biomarkers are within acceptable ranges. Continue preventive health monitoring and annual screening.
-              {% endif %}
-            </span>
+          
+          <div id="prediction-result-box" style="display:none">
+              <!-- Populated by JS -->
           </div>
-
-          {% else %}
-          <div class="result-placeholder">
-            <i class="fas fa-microscope"></i>
-            <p>Enter patient biomarkers and click "Analyze Risk" to generate an AI prediction.</p>
-          </div>
-          {% endif %}
 
           <div style="font-size:12px;color:var(--text-muted);border-top:1px solid var(--glass-border);padding-top:16px;display:flex;align-items:center;gap:8px">
             <i class="fas fa-shield-alt" style="color:var(--accent-green)"></i>
@@ -267,25 +254,8 @@
       <h1 class="section-title">Risk Factor Analysis</h1>
       <p class="section-subtitle">Side-by-side comparison of key biomarkers between diabetic and non-diabetic populations</p>
 
-      <div class="risk-grid">
-        {% set metrics = [
-          ('Glucose', stats.avg_glucose_non, stats.avg_glucose_diabetic, 200),
-          ('BMI', stats.avg_bmi_non, stats.avg_bmi_diabetic, 60),
-          ('Age', stats.avg_age_non, stats.avg_age_diabetic, 80)
-        ] %}
-        {% for name, non_val, diab_val, max_val in metrics %}
-        <div class="risk-metric-card">
-          <div class="risk-metric-label">{{ name }}</div>
-          <div style="font-size:22px;font-weight:700;font-family:'Outfit',sans-serif;color:var(--text-primary)">{{ diab_val }}</div>
-          <div class="risk-bar-track">
-            <div class="risk-bar-fill" style="width:{{ ((diab_val / max_val) * 100)|round(0) }}%"></div>
-          </div>
-          <div class="risk-values">
-            <span>Non-Diabetic: {{ non_val }}</span>
-            <span class="val-diabetic">Diabetic: {{ diab_val }}</span>
-          </div>
-        </div>
-        {% endfor %}
+      <div class="risk-grid" id="risk-metrics-grid">
+        <!-- Populated by JS -->
       </div>
 
       <div class="charts-row">
@@ -376,6 +346,6 @@
   </div><!-- end main-content -->
 </div><!-- end app-shell -->
 
-<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+<script src="js/script.js"></script>
 </body>
 </html>
