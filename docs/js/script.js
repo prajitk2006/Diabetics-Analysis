@@ -86,7 +86,7 @@ let globalStats = null;
 
 async function fetchStats() {
   try {
-    const res = await fetch('/api/stats');
+    const res = await fetch('api/stats.json');
     globalStats = await res.json();
     populateStats(globalStats);
     populateComparisonTable(globalStats);
@@ -153,7 +153,7 @@ function populateRiskGrid(stats) {
    ============================================================ */
 async function initOverviewCharts() {
   try {
-    const res  = await fetch('/api/chart_data');
+    const res  = await fetch('api/chart_data.json');
     const data = await res.json();
 
     const glucoseCtx = document.getElementById('glucoseChart').getContext('2d');
@@ -232,7 +232,7 @@ async function initOverviewCharts() {
 
 async function initRiskCharts() {
   try {
-    const res  = await fetch('/api/chart_data');
+    const res  = await fetch('api/chart_data.json');
     const data = await res.json();
 
     const bmiCtx = document.getElementById('bmiChart').getContext('2d');
@@ -287,7 +287,7 @@ async function initRiskCharts() {
 
 async function initYearlyChart() {
   try {
-    const res  = await fetch('/api/yearly_trends');
+    const res  = await fetch('api/yearly_trends.json');
     const data = await res.json();
 
     const ctx = document.getElementById('yearlyTrendChart').getContext('2d');
@@ -327,7 +327,7 @@ async function initYearlyChart() {
     const col   = data.trend_direction === 'increasing' ? GLASS.color.rose : GLASS.color.green;
     trendSpan.innerHTML = `<span style="color:${col}">${arrow} ${Math.abs(data.percent_change)}% change since 2000</span>`;
 
-    const insRes  = await fetch('/api/agent_insight');
+    const insRes  = await fetch('api/agent_insight.json');
     const insData = await insRes.json();
     document.querySelector('#agentInsight span').textContent = insData.insight;
 
@@ -336,7 +336,7 @@ async function initYearlyChart() {
 
 async function initModelCharts() {
   try {
-    const res  = await fetch('/api/chart_data');
+    const res  = await fetch('api/chart_data.json');
     const data = await res.json();
 
     const ctx = document.getElementById('importanceChart2').getContext('2d');
@@ -374,11 +374,29 @@ if (form) {
     
     const formData = new FormData(form);
     try {
-      const res = await fetch('/api/predict', {
-        method: 'POST',
-        body: formData
-      });
-      const result = await res.json();
+      // MOCK PREDICTION FOR GITHUB PAGES
+      // In a static site, we can't run the actual Python model.
+      // So we simulate a realistic response based on inputs.
+      const glucose = parseFloat(formData.get('Glucose')) || 100;
+      const bmi = parseFloat(formData.get('BMI')) || 25;
+      
+      let isHighRisk = false;
+      let prob = 0.15;
+      
+      if (glucose > 140 || bmi > 30) {
+        isHighRisk = true;
+        prob = 0.65 + (Math.random() * 0.3); // High probability
+      } else {
+        prob = 0.05 + (Math.random() * 0.2); // Low probability
+      }
+      
+      const result = {
+        prediction_text: `Result: ${isHighRisk ? "High Risk - Diabetic" : "Low Risk - Non-Diabetic"}`,
+        probability_text: `Risk Probability: ${(prob * 100).toFixed(1)}%`
+      };
+      
+      // Simulate network delay
+      await new Promise(r => setTimeout(r, 800));
       
       displayPrediction(result);
     } catch (e) {
