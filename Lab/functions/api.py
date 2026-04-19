@@ -19,11 +19,22 @@ app = Flask(__name__)
 CORS(app)
 
 # Paths - Netlify includes files in the root or specific folders
-# We'll try to find them relative to the function file or current working dir
-project_root = os.getcwd()
-SCALER_PATH = os.path.join(project_root, 'models', 'scaler.pkl')
-MODEL_PATH = os.path.join(project_root, 'models', 'diabetes_model.pkl')
-DATA_PATH = os.path.join(project_root, 'data', 'diabetes.csv')
+def find_file(rel_path):
+    # 1. Check relative to current working directory
+    p1 = os.path.join(os.getcwd(), rel_path)
+    if os.path.exists(p1): return p1
+    # 2. Check relative to function file
+    func_dir = os.path.dirname(os.path.abspath(__file__))
+    p2 = os.path.join(func_dir, rel_path)
+    if os.path.exists(p2): return p2
+    # 3. Check one level up from function file
+    p3 = os.path.join(os.path.dirname(func_dir), rel_path)
+    if os.path.exists(p3): return p3
+    return p1
+
+SCALER_PATH = find_file(os.path.join('models', 'scaler.pkl'))
+MODEL_PATH = find_file(os.path.join('models', 'diabetes_model.pkl'))
+DATA_PATH = find_file(os.path.join('data', 'diabetes.csv'))
 
 # Lazy load models to handle cold starts and file access issues
 _models = {}
