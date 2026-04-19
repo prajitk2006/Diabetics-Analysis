@@ -3,7 +3,6 @@
   functions = "functions"
 
 [functions]
-  node_bundler = "esbuild"
   included_files = ["models/*.pkl", "data/*.csv"]
 
 [[redirects]]
