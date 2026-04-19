@@ -1,0 +1,4 @@
+[build]
+  base = "Lab"
+  publish = "public"
+  functions = "functions"
