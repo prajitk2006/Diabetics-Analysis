@@ -60,6 +60,7 @@ def get_models():
 FEATURE_NAMES = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
 
 @app.route('/api/stats')
+@app.route('/.netlify/functions/api/stats')
 def stats():
     m = get_models()
     if not m: return jsonify({"error": "Model load failed"}), 500
@@ -79,6 +80,7 @@ def stats():
     return jsonify(stats)
 
 @app.route('/api/chart_data')
+@app.route('/.netlify/functions/api/chart_data')
 def chart_data():
     m = get_models()
     if not m: return jsonify({"error": "Model load failed"}), 500
@@ -105,6 +107,7 @@ def chart_data():
     })
 
 @app.route('/api/yearly_trends')
+@app.route('/.netlify/functions/api/yearly_trends')
 def yearly_trends():
     years = list(range(2000, 2026))
     prevalence = [5.5 + (0.18 * i) + random.uniform(-0.3, 0.3) for i in range(len(years))]
@@ -118,10 +121,12 @@ def yearly_trends():
     })
 
 @app.route('/api/agent_insight')
+@app.route('/.netlify/functions/api/agent_insight')
 def agent_insight():
     return jsonify({'insight': 'Diabetes prevalence has shown a steady 42.8% increase in this cohort since 2000. Current model accuracy remains high at 87.3%.'})
 
 @app.route('/api/predict', methods=['POST'])
+@app.route('/.netlify/functions/api/predict', methods=['POST'])
 def predict():
     try:
         m = get_models()
@@ -150,9 +155,22 @@ def predict():
         return jsonify({'error': str(e)}), 400
 
 def handler(event, context):
-    if serverless_wsgi:
-        return serverless_wsgi.handle_request(app, event, context)
-    return {"statusCode": 500, "body": "serverless_wsgi not installed"}
+    try:
+        if serverless_wsgi:
+            return serverless_wsgi.handle_request(app, event, context)
+        return {
+            "statusCode": 500, 
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": "serverless_wsgi not installed"})
+        }
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": str(e), "trace": err_msg})
+        }
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
